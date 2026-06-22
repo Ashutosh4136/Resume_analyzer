@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Upload Resume — ResumeMatch{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+
+    <div class="text-center mb-4">
+      <h2 class="fw-bold">Analyze Your Resume</h2>
+      <p class="text-muted">Upload your PDF resume and paste the job description to get your match score.</p>
+    </div>
+
+    <div class="card p-4">
+      <form method="post" enctype="multipart/form-data" id="uploadForm">
+        {% csrf_token %}
+
+        <!-- Default resume option -->
+        {% if has_default_resume %}
+        <div class="alert alert-light border d-flex align-items-center justify-content-between mb-3">
+          <div class="form-check mb-0">
+            <input class="form-check-input" type="checkbox" name="use_default_resume" id="useDefaultResume">
+            <label class="form-check-label fw-semibold" for="useDefaultResume">
+              <i class="bi bi-file-earmark-check text-success me-1"></i>
+              Use my saved default resume
+            </label>
+          </div>
+          <span class="badge bg-secondary">{{ default_resume_name }}</span>
+        </div>
+        {% endif %}
+
+        <!-- Drag-and-drop zone -->
+        <div id="dropZoneWrapper">
+          <div id="dropZone" class="text-center p-5 mb-2" onclick="document.getElementById('resumeFileInput').click()">
+            <i class="bi bi-cloud-arrow-up fs-1 text-primary"></i>
+            <p class="mt-2 mb-1 fw-semibold" id="dropText">Drag & drop your PDF here</p>
+            <p class="text-muted small">or click to browse — max 5 MB</p>
+            <span class="badge bg-primary" id="fileName" style="display:none;"></span>
+            {{ form.resume_file }}
+          </div>
+        </div>
+        {% if form.resume_file.errors %}
+          <div class="text-danger small mb-3">{{ form.resume_file.errors }}</div>
+        {% endif %}
+
+        {% if has_default_resume %}
+        <div class="form-check mb-4" id="saveAsDefaultWrapper">
+          <input class="form-check-input" type="checkbox" name="save_as_default" id="saveAsDefault">
+          <label class="form-check-label small text-muted" for="saveAsDefault">
+            Save this upload as my new default resume
+          </label>
+        </div>
+        {% else %}
+        <div class="form-check mb-4" id="saveAsDefaultWrapper">
+          <input class="form-check-input" type="checkbox" name="save_as_default" id="saveAsDefault">
+          <label class="form-check-label small text-muted" for="saveAsDefault">
+            <i class="bi bi-star me-1"></i>Save this as my default resume for next time
+          </label>
+        </div>
+        {% endif %}
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Job Title</label>
+            {{ form.job_title }}
+            {% if form.job_title.errors %}
+              <div class="text-danger small">{{ form.job_title.errors }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Company Name</label>
+            {{ form.company_name }}
+            {% if form.company_name.errors %}
+              <div class="text-danger small">{{ form.company_name.errors }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Job Description</label>
+          {{ form.job_description }}
+          {% if form.job_description.errors %}
+            <div class="text-danger small">{{ form.job_description.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div class="d-grid">
+          <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+            <i class="bi bi-graph-up-arrow me-2"></i>Analyze Match
+          </button>
+        </div>
+      </form>
+    </div><!-- /card -->
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const dropZoneWrapper = document.getElementById('dropZoneWrapper');
+  const saveAsDefaultWrapper = document.getElementById('saveAsDefaultWrapper');
+  const useDefaultCheckbox = document.getElementById('useDefaultResume');
+
+  // Hide upload zone when "use default resume" is checked
+  if (useDefaultCheckbox) {
+    useDefaultCheckbox.addEventListener('change', () => {
+      const checked = useDefaultCheckbox.checked;
+      dropZoneWrapper.style.display = checked ? 'none' : 'block';
+      saveAsDefaultWrapper.style.display = checked ? 'none' : 'block';
+      fileInput.required = !checked;
+    });
+  }
+
+  // --- Drag & drop logic ---
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('resumeFileInput');
+  const fileNameBadge = document.getElementById('fileName');
+  const dropText = document.getElementById('dropText');
+
+  function showFileName(name) {
+    fileNameBadge.textContent = name;
+    fileNameBadge.style.display = 'inline-block';
+    dropText.textContent = 'File selected:';
+  }
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) showFileName(fileInput.files[0].name);
+  });
+
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const dt = e.dataTransfer;
+    if (dt.files.length) {
+      const file = dt.files[0];
+      if (!file.name.endsWith('.pdf')) {
+        alert('Only PDF files are accepted.');
+        return;
+      }
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      fileInput.files = transfer.files;
+      showFileName(file.name);
+    }
+  });
+
+  document.getElementById('uploadForm').addEventListener('submit', function () {
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analyzing…';
+  });
+</script>
+{% endblock %}

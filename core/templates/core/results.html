@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}Results — {{ session.job_title }}{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+
+<div class="mb-3 d-flex justify-content-between flex-wrap gap-2">
+  <a href="{% url 'core:history' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back to History
+  </a>
+  <div class="d-flex gap-2">
+    <a href="{% url 'core:reanalyze' session.pk %}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-arrow-repeat me-1"></i>Edit JD & Re-analyze
+    </a>
+    <a href="{% url 'core:export_pdf' session.pk %}" class="btn btn-outline-success btn-sm">
+      <i class="bi bi-file-earmark-pdf me-1"></i>Export as PDF
+    </a>
+  </div>
+</div>
+
+{% if analysis_incomplete %}
+<div class="card p-5 text-center">
+  <i class="bi bi-file-earmark-x text-warning" style="font-size:3rem;"></i>
+  <h4 class="fw-bold mt-3">Analysis Incomplete</h4>
+  <p class="text-muted">
+    We couldn't extract readable keyword data for this session — this usually
+    happens with scanned/image-only PDFs or a very short job description.
+  </p>
+  <div class="d-flex justify-content-center gap-2 mt-3">
+    <a href="{% url 'core:reanalyze' session.pk %}" class="btn btn-primary">
+      <i class="bi bi-arrow-repeat me-1"></i>Try Editing JD & Re-analyzing
+    </a>
+    <a href="{% url 'core:upload' %}" class="btn btn-outline-secondary">
+      Upload a Different Resume
+    </a>
+  </div>
+</div>
+
+{% else %}
+<div class="row g-4">
+
+  <!-- LEFT: Score Card -->
+  <div class="col-lg-4">
+    <div class="card p-4 text-center h-100">
+      <h5 class="fw-bold mb-1">{{ session.job_title }}</h5>
+      <p class="text-muted small mb-3">{{ session.company_name }}</p>
+
+      <div class="row g-2">
+        <div class="col-6">
+          <canvas id="scoreChart" style="max-width:120px; margin:0 auto;"></canvas>
+          <div class="fw-bold mt-1">{{ session.match_score|floatformat:1 }}%</div>
+          <div class="text-muted small">Standard</div>
+        </div>
+        <div class="col-6">
+          <canvas id="weightedScoreChart" style="max-width:120px; margin:0 auto;"></canvas>
+          <div class="fw-bold mt-1">{{ session.weighted_score|floatformat:1 }}%</div>
+          <div class="text-muted small">Weighted</div>
+        </div>
+      </div>
+
+      <div class="alert alert-light border small mt-3 mb-0 text-start">
+        <i class="bi bi-info-circle me-1"></i>
+        <strong>Weighted score</strong> gives more credit for matching high-value
+        skills/tools over generic words — often a better fit signal.
+      </div>
+
+      <hr class="my-3"/>
+      <div class="row text-center g-2">
+        <div class="col-6">
+          <div class="fw-bold text-success fs-5">{{ matched|length }}</div>
+          <div class="text-muted small">Matched</div>
+        </div>
+        <div class="col-6">
+          <div class="fw-bold text-danger fs-5">{{ missing|length }}</div>
+          <div class="text-muted small">Missing</div>
+        </div>
+      </div>
+
+      <hr class="my-3"/>
+      <p class="text-muted small mb-0">
+        <i class="bi bi-calendar3 me-1"></i>
+        {{ session.created_at|date:"N j, Y, g:i a" }}
+      </p>
+    </div>
+  </div>
+
+  <!-- RIGHT: Keywords -->
+  <div class="col-lg-8">
+
+    <!-- Matched Keywords -->
+    <div class="card p-4 mb-4">
+      <h5 class="fw-bold mb-3 text-success">
+        <i class="bi bi-check-circle-fill me-2"></i>Matched Keywords
+        <span class="badge bg-success ms-2">{{ matched|length }}</span>
+      </h5>
+      {% if matched %}
+        <div class="d-flex flex-wrap gap-2">
+          {% for kw in matched %}
+            <span class="badge bg-success badge-keyword" title="{{ kw.category }} · weight {{ kw.importance_weight }}">
+              {{ kw.keyword }}
+            </span>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-muted mb-0">No matching keywords found.</p>
+      {% endif %}
+    </div>
+
+    <!-- Missing Keywords with section suggestions -->
+    <div class="card p-4">
+      <h5 class="fw-bold mb-3 text-danger">
+        <i class="bi bi-x-circle-fill me-2"></i>Missing Keywords
+        <span class="badge bg-danger ms-2">{{ missing|length }}</span>
+      </h5>
+      {% if missing_with_suggestions %}
+        <p class="text-muted small mb-3">
+          Consider adding these terms to your resume in the suggested sections below.
+        </p>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Keyword</th>
+                <th>Category</th>
+                <th>Suggested Section</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in missing_with_suggestions %}
+              <tr>
+                <td>
+                  <span class="badge bg-danger badge-keyword">{{ item.keyword.keyword }}</span>
+                </td>
+                <td><span class="badge bg-secondary">{{ item.keyword.category }}</span></td>
+                <td class="text-primary small">
+                  <i class="bi bi-arrow-right-short"></i> {{ item.suggestion }}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="text-muted mb-0">You covered all keywords — great job!</p>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+
+<!-- Full category breakdown table -->
+<div class="card p-4 mt-4">
+  <h5 class="fw-bold mb-3"><i class="bi bi-table me-2"></i>Keyword Breakdown by Category</h5>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Keyword</th>
+          <th>Category</th>
+          <th>Weight</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for kw in matched %}
+        <tr>
+          <td>{{ kw.keyword }}</td>
+          <td><span class="badge bg-secondary">{{ kw.category }}</span></td>
+          <td>{{ kw.importance_weight }}</td>
+          <td><span class="badge bg-success">Found</span></td>
+        </tr>
+        {% endfor %}
+        {% for kw in missing %}
+        <tr>
+          <td>{{ kw.keyword }}</td>
+          <td><span class="badge bg-secondary">{{ kw.category }}</span></td>
+          <td>{{ kw.importance_weight }}</td>
+          <td><span class="badge bg-danger">Missing</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="text-center mt-4">
+  <a href="{% url 'core:upload' %}" class="btn btn-primary">
+    <i class="bi bi-upload me-2"></i>Analyze Another Resume
+  </a>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if not analysis_incomplete %}
+<script>
+  function buildScoreChart(canvasId, score, color) {
+    const remaining = +(100 - score).toFixed(1);
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        datasets: [{
+          data: [score, remaining],
+          backgroundColor: [color, '#e9ecef'],
+          borderWidth: 0,
+        }]
+      },
+      options: {
+        cutout: '75%',
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        animation: {
+          animateRotate: true,
+          duration: 1000,
+          easing: 'easeInOutQuart',
+        }
+      }
+    });
+  }
+
+  buildScoreChart('scoreChart', {{ score_json }}, "{{ chart_color }}");
+  buildScoreChart('weightedScoreChart', {{ weighted_score_json }}, "{{ w_chart_color }}");
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}My Resume Versions — ResumeMatch{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+
+    <div class="text-center mb-4">
+      <h2 class="fw-bold">My Resume Versions</h2>
+      <p class="text-muted">Save multiple tagged resumes and pick one at upload time.</p>
+    </div>
+
+    <!-- Add new version -->
+    <div class="card p-4 mb-4">
+      <h5 class="fw-bold mb-3"><i class="bi bi-plus-circle me-2"></i>Add New Version</h5>
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="row g-3 align-items-end">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Label</label>
+            {{ form.label }}
+            {% if form.label.errors %}<div class="text-danger small">{{ form.label.errors }}</div>{% endif %}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">PDF File</label>
+            {{ form.resume_file }}
+            {% if form.resume_file.errors %}<div class="text-danger small">{{ form.resume_file.errors }}</div>{% endif %}
+          </div>
+          <div class="col-md-2 form-check ms-2">
+            {{ form.is_default }}
+            <label class="form-check-label small" for="{{ form.is_default.id_for_label }}">Set as default</label>
+          </div>
+          <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">
+              <i class="bi bi-save me-1"></i>Save
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Existing versions -->
+    <div class="card p-4">
+      <h5 class="fw-bold mb-3"><i class="bi bi-files me-2"></i>Saved Versions</h5>
+      {% if versions %}
+        <div class="list-group">
+          {% for v in versions %}
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+              <strong>{{ v.label }}</strong>
+              {% if v.is_default %}<span class="badge bg-primary ms-2">Default</span>{% endif %}
+              <div class="text-muted small">
+                {{ v.resume_file.name|cut:"resume_versions/" }} ·
+                Added {{ v.created_at|date:"N j, Y" }}
+              </div>
+            </div>
+            <form method="post" action="{% url 'core:delete_resume_version' v.pk %}"
+                  onsubmit="return confirm('Delete this resume version?');">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-outline-danger btn-sm">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-muted mb-0">No saved resume versions yet.</p>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endblock %}

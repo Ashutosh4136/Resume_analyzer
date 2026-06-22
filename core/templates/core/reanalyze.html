@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Re-analyze — {{ session.job_title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+
+    <div class="mb-3">
+      <a href="{% url 'core:results' session.pk %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to Results
+      </a>
+    </div>
+
+    <div class="text-center mb-4">
+      <h2 class="fw-bold">Re-run Analysis</h2>
+      <p class="text-muted">
+        Edit the job details below — your original resume PDF will be reused.
+      </p>
+      <span class="badge bg-light text-dark border">
+        <i class="bi bi-file-earmark-pdf me-1"></i>
+        {{ session.resume_file.name|cut:"resumes/" }}
+      </span>
+    </div>
+
+    <div class="card p-4">
+      <form method="post" id="reanalyzeForm">
+        {% csrf_token %}
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Job Title</label>
+            {{ form.job_title }}
+            {% if form.job_title.errors %}
+              <div class="text-danger small">{{ form.job_title.errors }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Company Name</label>
+            {{ form.company_name }}
+            {% if form.company_name.errors %}
+              <div class="text-danger small">{{ form.company_name.errors }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Job Description</label>
+          {{ form.job_description }}
+          {% if form.job_description.errors %}
+            <div class="text-danger small">{{ form.job_description.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div class="alert alert-info small">
+          <i class="bi bi-info-circle me-1"></i>
+          Previous keyword results for this session will be replaced with the new analysis.
+        </div>
+
+        <div class="d-grid">
+          <button type="submit" class="btn btn-primary btn-lg" id="reanalyzeBtn">
+            <i class="bi bi-arrow-repeat me-2"></i>Re-run Analysis
+          </button>
+        </div>
+      </form>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.getElementById('reanalyzeForm').addEventListener('submit', function () {
+    const btn = document.getElementById('reanalyzeBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Re-analyzing…';
+  });
+</script>
+{% endblock %}

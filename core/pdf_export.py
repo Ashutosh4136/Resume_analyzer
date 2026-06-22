@@ -1,0 +1,130 @@
+"""
+Generates a downloadable PDF report of an AnalysisSession's results.
+Uses reportlab — chosen over weasyprint because it has no system-level
+dependencies (no need for GTK/Pango), making it easier to deploy.
+"""
+
+import io
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+from reportlab.platypus import (
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable
+)
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER
+
+
+def _score_color(score):
+    if score >= 70:
+        return colors.HexColor('#198754')
+    elif score >= 40:
+        return colors.HexColor('#ffc107')
+    return colors.HexColor('#dc3545')
+
+
+def generate_results_pdf(session) -> io.BytesIO:
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        topMargin=2 * cm, bottomMargin=2 * cm,
+        leftMargin=2 * cm, rightMargin=2 * cm,
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'TitleStyle', parent=styles['Title'], fontSize=20, spaceAfter=4,
+    )
+    subtitle_style = ParagraphStyle(
+        'SubtitleStyle', parent=styles['Normal'], fontSize=11,
+        textColor=colors.grey, spaceAfter=16,
+    )
+    section_style = ParagraphStyle(
+        'SectionStyle', parent=styles['Heading2'], fontSize=14,
+        spaceBefore=16, spaceAfter=8,
+    )
+    score_style = ParagraphStyle(
+        'ScoreStyle', parent=styles['Title'], fontSize=36,
+        alignment=TA_CENTER, textColor=_score_color(session.match_score),
+    )
+
+    elements = []
+
+    elements.append(Paragraph('Resume Match Report', title_style))
+    elements.append(Paragraph(
+        f"{session.job_title} at {session.company_name} &nbsp;|&nbsp; "
+        f"Generated {session.created_at.strftime('%B %d, %Y')}",
+        subtitle_style
+    ))
+    elements.append(HRFlowable(width="100%", color=colors.lightgrey))
+
+    # --- Score summary table ---
+    elements.append(Spacer(1, 12))
+    score_table = Table([
+        [Paragraph(f"{session.match_score:.1f}%", score_style),
+         Paragraph(f"{session.weighted_score:.1f}%", score_style)],
+        [Paragraph("Standard Match Score", styles['Normal']),
+         Paragraph("Weighted Match Score", styles['Normal'])],
+    ], colWidths=[8 * cm, 8 * cm])
+    score_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+    ]))
+    elements.append(score_table)
+
+    # --- Matched keywords ---
+    matched = session.keywords.filter(found_in_resume=True).order_by('-importance_weight')
+    missing = session.keywords.filter(found_in_resume=False).order_by('-importance_weight')
+
+    elements.append(Paragraph(f"Matched Keywords ({matched.count()})", section_style))
+    if matched.exists():
+        rows = [['Keyword', 'Category', 'Weight']]
+        for kw in matched:
+            rows.append([kw.keyword, kw.category.title(), f"{kw.importance_weight:.1f}"])
+        t = Table(rows, colWidths=[8 * cm, 5 * cm, 3 * cm])
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#198754')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ]))
+        elements.append(t)
+    else:
+        elements.append(Paragraph("No matched keywords.", styles['Normal']))
+
+    # --- Missing keywords with suggestions ---
+    elements.append(Paragraph(f"Missing Keywords ({missing.count()})", section_style))
+    if missing.exists():
+        rows = [['Keyword', 'Category', 'Suggested Section']]
+        for kw in missing:
+            rows.append([kw.keyword, kw.category.title(), kw.get_section_suggestion()])
+        t = Table(rows, colWidths=[5 * cm, 4 * cm, 7 * cm])
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#dc3545')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ]))
+        elements.append(t)
+    else:
+        elements.append(Paragraph("You covered all keywords — great job!", styles['Normal']))
+
+    elements.append(Spacer(1, 20))
+    elements.append(HRFlowable(width="100%", color=colors.lightgrey))
+    elements.append(Paragraph(
+        "Generated by ResumeMatch — resumematch.local",
+        ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8,
+                        textColor=colors.grey, alignment=TA_CENTER, spaceBefore=8)
+    ))
+
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer

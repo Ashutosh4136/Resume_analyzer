@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Register — ResumeMatch{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5">
+    <div class="card p-4 mt-4">
+      <div class="text-center mb-4">
+        <i class="bi bi-person-plus-fill fs-1 text-primary"></i>
+        <h4 class="fw-bold mt-2">Create an Account</h4>
+      </div>
+      <form method="post">
+        {% csrf_token %}
+        {% for field in form %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ field.label }}</label>
+            <input type="{{ field.field.widget.input_type }}"
+                   name="{{ field.html_name }}"
+                   class="form-control {% if field.errors %}is-invalid{% endif %}"
+                   {% if field.value %}value="{{ field.value }}"{% endif %}
+                   {% if field.field.required %}required{% endif %}
+                   autocomplete="{{ field.html_name }}"/>
+            {% if field.help_text %}
+              <div class="form-text text-muted small">{{ field.help_text }}</div>
+            {% endif %}
+            {% for err in field.errors %}
+              <div class="invalid-feedback">{{ err }}</div>
+            {% endfor %}
+          </div>
+        {% endfor %}
+        <div class="d-grid mt-4">
+          <button type="submit" class="btn btn-primary btn-lg">
+            <i class="bi bi-person-check-fill me-2"></i>Create Account
+          </button>
+        </div>
+      </form>
+      <p class="text-center text-muted mt-3 mb-0">
+        Already have an account?
+        <a href="{% url 'users:login' %}">Login here</a>
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
