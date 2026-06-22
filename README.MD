@@ -168,8 +168,3 @@ Visit **http://127.0.0.1:8000/** in your browser.
 - Resume formatting feedback (section detection, length checks, quantifiable achievement detection)
 - Side-by-side comparison of one resume against multiple job descriptions
 
----
-
-## License
-
-This project is for educational/portfolio purposes. Add a license of your choice here (MIT, Apache 2.0, etc.) if open-sourcing.
