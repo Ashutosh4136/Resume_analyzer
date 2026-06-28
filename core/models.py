@@ -3,6 +3,18 @@ from django.contrib.auth.models import User
 
 
 class AnalysisSession(models.Model):
+    STATUS_PENDING = 'pending'
+    STATUS_PROCESSING = 'processing'
+    STATUS_COMPLETE = 'complete'
+    STATUS_FAILED = 'failed'
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_PROCESSING, 'Processing'),
+        (STATUS_COMPLETE, 'Complete'),
+        (STATUS_FAILED, 'Failed'),
+    ]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions')
     resume_file = models.FileField(upload_to='resumes/')
     job_description = models.TextField()
@@ -10,7 +22,15 @@ class AnalysisSession(models.Model):
     company_name = models.CharField(max_length=200)
     created_at = models.DateTimeField(auto_now_add=True)
     match_score = models.FloatField(default=0.0)
-    weighted_score = models.FloatField(default=0.0)  # NEW — importance-weighted score
+    weighted_score = models.FloatField(default=0.0)
+
+    # Async status tracking (Celery)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    error_message = models.TextField(blank=True, default='')
+
+    # Resume quality + AI feedback
+    formatting_feedback = models.JSONField(default=dict, blank=True)
+    ai_feedback = models.TextField(blank=True, default='')
 
     class Meta:
         ordering = ['-created_at']

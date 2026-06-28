@@ -10,6 +10,8 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.util import ngrams
 
+from .ai_feedback import generate_ai_feedback
+
 logger = logging.getLogger(__name__)
 
 # Download required NLTK data on first run
@@ -163,7 +165,34 @@ def importance_weight(keyword: str, category: str) -> float:
 
 
 # ---------------------------------------------------------------------------
-# 6. Master analysis pipeline
+# 6. Weighted match score
+# ---------------------------------------------------------------------------
+
+def compute_weighted_match_score(keyword_results) -> float:
+    """
+    Weighted match score: sum of importance_weight for matched keywords
+    divided by sum of importance_weight for all JD keywords, * 100.
+
+    Unlike plain Jaccard, this gives more credit for matching high-value
+    keywords (skills) than low-value ones (general terms).
+
+    `keyword_results` is an iterable of KeywordResult-like objects with
+    `.found_in_resume` and `.importance_weight` attributes.
+    """
+    keyword_results = list(keyword_results)
+    if not keyword_results:
+        return 0.0
+
+    total_weight = sum(kr.importance_weight for kr in keyword_results)
+    if total_weight == 0:
+        return 0.0
+
+    matched_weight = sum(kr.importance_weight for kr in keyword_results if kr.found_in_resume)
+    return round(matched_weight / total_weight * 100, 2)
+
+
+# ---------------------------------------------------------------------------
+# 7. Master analysis pipeline
 # ---------------------------------------------------------------------------
 
 class AnalysisError(Exception):
@@ -172,6 +201,18 @@ class AnalysisError(Exception):
 
 
 def run_analysis(session) -> None:
+    """
+    Full pipeline:
+      1. Extract text from the uploaded PDF.
+      2. Extract keywords from both resume and JD.
+      3. Compute Jaccard + weighted match scores.
+      4. Persist KeywordResult rows.
+      5. Generate qualitative AI feedback (Groq) — never blocks on failure.
+      6. Save everything to the session.
+
+    Raises AnalysisError if the PDF has no extractable text or the JD
+    has no usable keywords.
+    """
     from .models import KeywordResult
 
     pdf_path = session.resume_file.path
@@ -198,6 +239,7 @@ def run_analysis(session) -> None:
     score = compute_match_score(resume_kw, jd_kw)
     session.match_score = score
 
+    # Clear old keyword rows first — important for re-analysis
     KeywordResult.objects.filter(session=session).delete()
 
     kw_objects = []
@@ -215,26 +257,13 @@ def run_analysis(session) -> None:
 
     # Weighted score computed from the same in-memory objects (no extra query)
     session.weighted_score = compute_weighted_match_score(created)
-    session.save(update_fields=['match_score', 'weighted_score'])
 
-def compute_weighted_match_score(keyword_results) -> float:
-    """
-    Weighted match score: sum of importance_weight for matched keywords
-    divided by sum of importance_weight for all JD keywords, * 100.
+    # Qualitative AI feedback via Groq — never raises, returns '' on failure
+    session.ai_feedback = generate_ai_feedback(
+        resume_text=resume_text,
+        job_description=jd_text,
+        job_title=session.job_title,
+        company_name=session.company_name,
+    )
 
-    Unlike plain Jaccard, this gives more credit for matching high-value
-    keywords (skills) than low-value ones (general terms).
-
-    `keyword_results` is an iterable of KeywordResult-like objects with
-    `.found_in_resume` and `.importance_weight` attributes.
-    """
-    keyword_results = list(keyword_results)
-    if not keyword_results:
-        return 0.0
-
-    total_weight = sum(kr.importance_weight for kr in keyword_results)
-    if total_weight == 0:
-        return 0.0
-
-    matched_weight = sum(kr.importance_weight for kr in keyword_results if kr.found_in_resume)
-    return round(matched_weight / total_weight * 100, 2)
+    session.save(update_fields=['match_score', 'weighted_score', 'ai_feedback'])

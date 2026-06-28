@@ -109,7 +109,7 @@ def results_view(request, pk):
     w_chart_color, w_chart_bg = _colors_for(session.weighted_score)
 
     context = {
-        'session': session,
+    'session': session,
         'matched': matched,
         'missing': missing,
         'missing_with_suggestions': missing_with_suggestions,
@@ -120,6 +120,7 @@ def results_view(request, pk):
         'score_json': json.dumps(round(session.match_score, 1)),
         'weighted_score_json': json.dumps(round(session.weighted_score, 1)),
         'analysis_incomplete': analysis_incomplete,
+        'ai_feedback': session.ai_feedback,
     }
     return render(request, 'core/results.html', context)
 
