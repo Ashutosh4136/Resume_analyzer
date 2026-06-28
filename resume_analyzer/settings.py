@@ -144,3 +144,7 @@ DEFAULT_FROM_EMAIL = 'noreply@resumematch.local'
 # EMAIL_USE_TLS = True
 # EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
 # EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+import os
+
+# Groq API key — free tier, set as an environment variable, never hardcode it
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
