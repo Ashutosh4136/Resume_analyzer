@@ -41,7 +41,9 @@
 
 {% else %}
 
+<!-- ============================================================ -->
 <!-- AI Feedback -->
+<!-- ============================================================ -->
 {% if ai_feedback %}
 <div class="card p-4 mb-4" style="border-left: 3px solid var(--accent);">
   <h5 class="fw-bold mb-3">
@@ -54,6 +56,101 @@
 </div>
 {% endif %}
 
+<!-- ============================================================ -->
+<!-- Resume Formatting Feedback -->
+<!-- ============================================================ -->
+{% if formatting %}
+<div class="card p-4 mb-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="fw-bold mb-0">
+      <i class="bi bi-file-earmark-text me-2 text-primary"></i>Resume Formatting Feedback
+    </h5>
+    <span class="badge bg-{% if formatting.formatting_score >= 70 %}success{% elif formatting.formatting_score >= 40 %}warning{% else %}danger{% endif %} fs-6">
+      {{ formatting.formatting_score }}/100
+    </span>
+  </div>
+
+  <div class="row g-3">
+
+    <!-- Sections -->
+    <div class="col-md-6">
+      <div class="border rounded p-3 h-100" style="border-color: var(--border-subtle) !important;">
+        <h6 class="fw-semibold mb-2"><i class="bi bi-list-check me-1"></i>Sections Detected</h6>
+        {% if formatting.missing_sections %}
+          <p class="text-warning small mb-2">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            Missing: {{ formatting.missing_sections|join:", "|title }}
+          </p>
+        {% else %}
+          <p class="text-success small mb-2">
+            <i class="bi bi-check-circle me-1"></i>All recommended sections found.
+          </p>
+        {% endif %}
+        <div class="d-flex flex-wrap gap-1">
+          {% for section, found in formatting.sections_detected.items %}
+            <span class="badge {% if found %}bg-success{% else %}bg-secondary{% endif %} badge-keyword">
+              {{ section|title }}
+            </span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Length -->
+    <div class="col-md-6">
+      <div class="border rounded p-3 h-100" style="border-color: var(--border-subtle) !important;">
+        <h6 class="fw-semibold mb-2"><i class="bi bi-rulers me-1"></i>Length Check</h6>
+        <p class="small mb-0
+          {% if formatting.length.classification == 'too_short' or formatting.length.classification == 'too_long' %}text-warning{% else %}text-success{% endif %}">
+          <i class="bi bi-{% if formatting.length.classification == 'too_short' or formatting.length.classification == 'too_long' %}exclamation-triangle{% else %}check-circle{% endif %} me-1"></i>
+          {{ formatting.length.message }}
+        </p>
+      </div>
+    </div>
+
+    <!-- Quantifiable achievements -->
+    <div class="col-md-6">
+      <div class="border rounded p-3 h-100" style="border-color: var(--border-subtle) !important;">
+        <h6 class="fw-semibold mb-2"><i class="bi bi-graph-up me-1"></i>Quantifiable Achievements</h6>
+        <p class="small mb-0
+          {% if formatting.quantifiable_achievements.level == 'none' or formatting.quantifiable_achievements.level == 'low' %}text-warning{% else %}text-success{% endif %}">
+          <i class="bi bi-{% if formatting.quantifiable_achievements.level == 'none' or formatting.quantifiable_achievements.level == 'low' %}exclamation-triangle{% else %}check-circle{% endif %} me-1"></i>
+          {{ formatting.quantifiable_achievements.message }}
+        </p>
+      </div>
+    </div>
+
+    <!-- Action verbs -->
+    <div class="col-md-6">
+      <div class="border rounded p-3 h-100" style="border-color: var(--border-subtle) !important;">
+        <h6 class="fw-semibold mb-2"><i class="bi bi-lightning-charge me-1"></i>Action Verbs</h6>
+        <p class="small mb-0
+          {% if formatting.action_verbs.weak_phrases_found %}text-warning{% else %}text-success{% endif %}">
+          <i class="bi bi-{% if formatting.action_verbs.weak_phrases_found %}exclamation-triangle{% else %}check-circle{% endif %} me-1"></i>
+          {{ formatting.action_verbs.message }}
+        </p>
+      </div>
+    </div>
+
+    <!-- Contact info (only show if there are issues) -->
+    {% if formatting.contact_info.issues %}
+    <div class="col-12">
+      <div class="border rounded p-3" style="border-color: var(--border-subtle) !important;">
+        <h6 class="fw-semibold mb-2"><i class="bi bi-person-vcard me-1"></i>Contact Info</h6>
+        {% for issue in formatting.contact_info.issues %}
+          <p class="text-warning small mb-1"><i class="bi bi-exclamation-triangle me-1"></i>{{ issue }}</p>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endif %}
+
+<!-- ============================================================ -->
+<!-- Score Card + Keywords -->
+<!-- ============================================================ -->
 <div class="row g-4">
 
   <!-- LEFT: Score Card -->
@@ -123,12 +220,21 @@
       {% endif %}
     </div>
 
-    <!-- Missing Keywords with section suggestions -->
+    <!-- Missing Keywords with section suggestions + AI rewrite suggestions -->
     <div class="card p-4">
-      <h5 class="fw-bold mb-3 text-danger">
-        <i class="bi bi-x-circle-fill me-2"></i>Missing Keywords
-        <span class="badge bg-danger ms-2">{{ missing|length }}</span>
-      </h5>
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h5 class="fw-bold mb-0 text-danger">
+          <i class="bi bi-x-circle-fill me-2"></i>Missing Keywords
+          <span class="badge bg-danger ms-2">{{ missing|length }}</span>
+        </h5>
+        {% if missing %}
+        <button class="btn btn-outline-primary btn-sm" id="getRewriteSuggestionsBtn"
+                data-url="{% url 'core:rewrite_suggestions' session.pk %}">
+          <i class="bi bi-magic me-1"></i>Get AI Rewrite Suggestions
+        </button>
+        {% endif %}
+      </div>
+
       {% if missing_with_suggestions %}
         <p class="text-muted small mb-3">
           Consider adding these terms to your resume in the suggested sections below.
@@ -140,17 +246,21 @@
                 <th>Keyword</th>
                 <th>Category</th>
                 <th>Suggested Section</th>
+                <th>AI Suggested Bullet Point</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody id="missingKeywordsTbody">
               {% for item in missing_with_suggestions %}
-              <tr>
+              <tr data-keyword="{{ item.keyword.keyword|lower }}">
                 <td>
                   <span class="badge bg-danger badge-keyword">{{ item.keyword.keyword }}</span>
                 </td>
                 <td><span class="badge bg-secondary">{{ item.keyword.category }}</span></td>
                 <td class="text-primary small">
                   <i class="bi bi-arrow-right-short"></i> {{ item.suggestion }}
+                </td>
+                <td class="rewrite-suggestion-cell text-muted small fst-italic">
+                  —
                 </td>
               </tr>
               {% endfor %}
@@ -165,41 +275,7 @@
   </div>
 </div>
 
-<!-- Full category breakdown table -->
-<div class="card p-4 mt-4">
-  <h5 class="fw-bold mb-3"><i class="bi bi-table me-2"></i>Keyword Breakdown by Category</h5>
-  <div class="table-responsive">
-    <table class="table table-sm table-hover align-middle">
-      <thead class="table-light">
-        <tr>
-          <th>Keyword</th>
-          <th>Category</th>
-          <th>Weight</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for kw in matched %}
-        <tr>
-          <td>{{ kw.keyword }}</td>
-          <td><span class="badge bg-secondary">{{ kw.category }}</span></td>
-          <td>{{ kw.importance_weight }}</td>
-          <td><span class="badge bg-success">Found</span></td>
-        </tr>
-        {% endfor %}
-        {% for kw in missing %}
-        <tr>
-          <td>{{ kw.keyword }}</td>
-          <td><span class="badge bg-secondary">{{ kw.category }}</span></td>
-          <td>{{ kw.importance_weight }}</td>
-          <td><span class="badge bg-danger">Missing</span></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
+      
 <div class="text-center mt-4">
   <a href="{% url 'core:upload' %}" class="btn btn-primary">
     <i class="bi bi-upload me-2"></i>Analyze Another Resume
@@ -212,6 +288,9 @@
 {% block extra_js %}
 {% if not analysis_incomplete %}
 <script>
+  // ---------------------------------------------------------------
+  // Score doughnut charts
+  // ---------------------------------------------------------------
   function buildScoreChart(canvasId, score, color) {
     const remaining = +(100 - score).toFixed(1);
     const ctx = document.getElementById(canvasId).getContext('2d');
@@ -238,6 +317,67 @@
 
   buildScoreChart('scoreChart', {{ score_json }}, "{{ chart_color }}");
   buildScoreChart('weightedScoreChart', {{ weighted_score_json }}, "{{ w_chart_color }}");
+
+  // ---------------------------------------------------------------
+  // AI Rewrite Suggestions (on-demand button)
+  // ---------------------------------------------------------------
+  const rewriteBtn = document.getElementById('getRewriteSuggestionsBtn');
+  const existingSuggestions = {{ rewrite_suggestions_json|safe }};
+
+  function populateSuggestions(suggestions) {
+    const rows = document.querySelectorAll('#missingKeywordsTbody tr');
+    rows.forEach(row => {
+      const keyword = row.dataset.keyword;
+      const cell = row.querySelector('.rewrite-suggestion-cell');
+      if (suggestions[keyword]) {
+        cell.textContent = suggestions[keyword];
+        cell.classList.remove('text-muted', 'fst-italic');
+      }
+    });
+  }
+
+  if (existingSuggestions && Object.keys(existingSuggestions).length > 0) {
+    populateSuggestions(existingSuggestions);
+    if (rewriteBtn) {
+      rewriteBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Suggestions Loaded';
+      rewriteBtn.disabled = true;
+      rewriteBtn.classList.replace('btn-outline-primary', 'btn-outline-success');
+    }
+  }
+
+  if (rewriteBtn) {
+    rewriteBtn.addEventListener('click', async () => {
+      rewriteBtn.disabled = true;
+      rewriteBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating…';
+
+      try {
+        const resp = await fetch(rewriteBtn.dataset.url, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        });
+        const data = await resp.json();
+
+        if (data.suggestions && Object.keys(data.suggestions).length > 0) {
+          populateSuggestions(data.suggestions);
+          rewriteBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Suggestions Loaded';
+          rewriteBtn.classList.replace('btn-outline-primary', 'btn-outline-success');
+        } else {
+          rewriteBtn.innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>No suggestions available';
+          rewriteBtn.disabled = false;
+        }
+      } catch (err) {
+        console.error('Rewrite suggestion fetch failed:', err);
+        rewriteBtn.innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>Failed — try again';
+        rewriteBtn.disabled = false;
+      }
+    });
+  }
+
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+  }
 </script>
 {% endif %}
 {% endblock %}
