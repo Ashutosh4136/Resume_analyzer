@@ -23,7 +23,8 @@ class AnalysisSession(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     match_score = models.FloatField(default=0.0)
     weighted_score = models.FloatField(default=0.0)
-
+    ai_feedback = models.TextField(blank=True, default='')
+    ai_rewrite_suggestions = models.JSONField(default=dict, blank=True)
     # Async status tracking (Celery)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
     error_message = models.TextField(blank=True, default='')

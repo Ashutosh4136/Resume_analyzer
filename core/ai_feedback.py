@@ -70,4 +70,69 @@ Write in plain, encouraging but honest language. Do not repeat the job descripti
     except Exception as exc:
         logger.warning("AI feedback generation failed: %s", exc)
         return ''
-    
+
+def generate_rewrite_suggestions(resume_text: str, missing_keywords: list, job_title: str) -> dict:
+    """
+    For each missing keyword, asks Groq for a short, concrete resume bullet
+    point suggestion that would naturally incorporate that keyword, based
+    on the candidate's actual resume content.
+
+    Returns a dict: {keyword: suggestion_text}
+    Returns an empty dict on any failure — never raises.
+    """
+    api_key = getattr(settings, 'GROQ_API_KEY', '')
+    if not api_key:
+        logger.info("GROQ_API_KEY not set — skipping rewrite suggestions.")
+        return {}
+
+    if not missing_keywords:
+        return {}
+
+    try:
+        from groq import Groq
+
+        client = Groq(api_key=api_key)
+
+        resume_snippet = resume_text[:MAX_RESUME_CHARS]
+        keywords_list = "\n".join(f"- {kw}" for kw in missing_keywords[:15])  # cap to 15
+
+        prompt = f"""You are a resume writing assistant. A candidate is applying for a "{job_title}" role and is missing the following keywords from their resume:
+
+{keywords_list}
+
+Here is their current resume text for context:
+{resume_snippet}
+
+For EACH missing keyword above, write ONE short, realistic resume bullet point (max 20 words) that the candidate could plausibly add, based on their existing experience. Only suggest something genuinely plausible given their background — do not fabricate experience they clearly don't have.
+
+Respond ONLY in this exact format, one line per keyword, no extra commentary:
+keyword: suggested bullet point text
+
+If a keyword is not plausible to add given their resume, write:
+keyword: SKIP"""
+
+        response = client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=800,
+            temperature=0.5,
+        )
+
+        raw_text = response.choices[0].message.content.strip()
+
+        suggestions = {}
+        for line in raw_text.split('\n'):
+            line = line.strip()
+            if not line or ':' not in line:
+                continue
+            keyword_part, _, suggestion_part = line.partition(':')
+            keyword_clean = keyword_part.strip().lower()
+            suggestion_clean = suggestion_part.strip()
+            if suggestion_clean and suggestion_clean.upper() != 'SKIP':
+                suggestions[keyword_clean] = suggestion_clean
+
+        return suggestions
+
+    except Exception as exc:
+        logger.warning("AI rewrite suggestion generation failed: %s", exc)
+        return {}

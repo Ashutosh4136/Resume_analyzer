@@ -5,7 +5,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView
 from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
-
+from .ai_feedback import generate_ai_feedback, generate_rewrite_suggestions
 from .models import AnalysisSession, KeywordResult, UserProfile, ResumeVersion
 from .forms import UploadForm, ReanalyzeForm, ResumeVersionForm
 from .services import run_analysis, AnalysisError
@@ -109,7 +109,7 @@ def results_view(request, pk):
     w_chart_color, w_chart_bg = _colors_for(session.weighted_score)
 
     context = {
-    'session': session,
+        'session': session,
         'matched': matched,
         'missing': missing,
         'missing_with_suggestions': missing_with_suggestions,
@@ -121,6 +121,8 @@ def results_view(request, pk):
         'weighted_score_json': json.dumps(round(session.weighted_score, 1)),
         'analysis_incomplete': analysis_incomplete,
         'ai_feedback': session.ai_feedback,
+        'formatting': session.formatting_feedback,
+        'rewrite_suggestions_json': json.dumps(session.ai_rewrite_suggestions),  # NEW
     }
     return render(request, 'core/results.html', context)
 
@@ -208,3 +210,41 @@ def export_pdf_view(request, pk):
     filename = f"resume_analysis_{session.job_title.replace(' ', '_')}_{session.pk}.pdf"
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
+
+@login_required
+def generate_rewrite_suggestions_view(request, pk):
+    """
+    AJAX endpoint — generates AI rewrite suggestions for missing keywords
+    on demand, caches them on the session, and returns JSON.
+    """
+    session = get_object_or_404(AnalysisSession, pk=pk, user=request.user)
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    # Return cached suggestions if already generated — avoids re-spending API calls
+    if session.ai_rewrite_suggestions:
+        return JsonResponse({'suggestions': session.ai_rewrite_suggestions, 'cached': True})
+
+    missing_keywords = list(
+        session.keywords.filter(found_in_resume=False)
+        .order_by('-importance_weight')
+        .values_list('keyword', flat=True)[:15]
+    )
+
+    if not missing_keywords:
+        return JsonResponse({'suggestions': {}, 'cached': False})
+
+    from .services import extract_text
+    resume_text = extract_text(session.resume_file.path)
+
+    suggestions = generate_rewrite_suggestions(
+        resume_text=resume_text,
+        missing_keywords=missing_keywords,
+        job_title=session.job_title,
+    )
+
+    session.ai_rewrite_suggestions = suggestions
+    session.save(update_fields=['ai_rewrite_suggestions'])
+
+    return JsonResponse({'suggestions': suggestions, 'cached': False})

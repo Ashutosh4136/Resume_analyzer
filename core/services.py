@@ -9,7 +9,7 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.util import ngrams
-
+from .formatting_checks import run_formatting_checks
 from .ai_feedback import generate_ai_feedback
 
 logger = logging.getLogger(__name__)
@@ -255,15 +255,20 @@ def run_analysis(session) -> None:
 
     created = KeywordResult.objects.bulk_create(kw_objects)
 
-    # Weighted score computed from the same in-memory objects (no extra query)
+        # Weighted score computed from the same in-memory objects (no extra query)
     session.weighted_score = compute_weighted_match_score(created)
 
-    # Qualitative AI feedback via Groq — never raises, returns '' on failure
-    session.ai_feedback = generate_ai_feedback(
-        resume_text=resume_text,
-        job_description=jd_text,
-        job_title=session.job_title,
-        company_name=session.company_name,
-    )
+        # Resume formatting/quality checks — pure heuristics, no API call
+    session.formatting_feedback = run_formatting_checks(resume_text)
 
-    session.save(update_fields=['match_score', 'weighted_score', 'ai_feedback'])
+        # Qualitative AI feedback via Groq — never raises, returns '' on failure
+    session.ai_feedback = generate_ai_feedback(
+            resume_text=resume_text,
+            job_description=jd_text,
+            job_title=session.job_title,
+            company_name=session.company_name,
+        )
+
+    session.save(update_fields=[
+            'match_score', 'weighted_score', 'formatting_feedback', 'ai_feedback'
+        ])
